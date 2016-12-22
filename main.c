@@ -21,7 +21,7 @@
 
 int main(int argc, char *argv[])
 {
-	puts("wud2app v1.1 by FIX94");
+	puts("wud2app v1.1u1 by FIX94");
 	char *ckeyChr = NULL, *gkeyChr = NULL, *gwudChr = NULL;
 	bool use_wudparts = false;
 	if(argc != 2 && argc != 4)
@@ -189,10 +189,10 @@ int main(int argc, char *argv[])
 	//start by getting cert, tik and tmd
 	for(siPart = 0; siPart < numPartitions; siPart++)
 	{
-		if(memcmp(tbl[siPart].name,"SI",3) == 0)
+		if(strncasecmp(tbl[siPart].name,"SI",3) == 0)
 			break;
 	}
-	if(memcmp(tbl[siPart].name,"SI",3) != 0)
+	if(strncasecmp(tbl[siPart].name,"SI",3) != 0)
 	{
 		puts("No SI Partition found!");
 		goto extractEnd;
@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
 			break;
 		uint32_t cNameOffset = __builtin_bswap32(fe[entry].NameOffset) >> 8;
 		const char *name = (const char*)(fstDec + NameOff + cNameOffset);
-		if(memcmp(name, "title.", 6) != 0)
+		if(strncasecmp(name, "title.", 6) != 0)
 			continue;
 		uint32_t CNTSize = __builtin_bswap32(fe[entry].FileLength);
 		uint64_t CNTOff = ((uint64_t)__builtin_bswap32(fe[entry].FileOffset)) << 5;
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
 		char outF[64];
 		sprintf(outF,"%s/%s",outDir,name);
 		//just write the first found cert, they're all the same anyways
-		if(memcmp(name, "title.cert", 11) == 0 && !certFound)
+		if(strncasecmp(name, "title.cert", 11) == 0 && !certFound)
 		{
 			puts("Writing title.cert");
 			FILE *t = fopen(outF, "wb");
@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
 			fclose(t);
 			certFound = true;
 		}
-		else if(memcmp(name, "title.tik", 10) == 0 && !tikFound)
+		else if(strncasecmp(name, "title.tik", 10) == 0 && !tikFound)
 		{
 			uint32_t tidHigh = __builtin_bswap32(*(uint32_t*)(titleDec+0x1DC));
 			if(tidHigh == 0x00050000)
@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 				aes_decrypt(iv,tikKeyEnc,tikKey,16);
 			}
 		}
-		else if(memcmp(name, "title.tmd", 10) == 0 && !tmdFound)
+		else if(strncasecmp(name, "title.tmd", 10) == 0 && !tmdFound)
 		{
 			uint32_t tidHigh = __builtin_bswap32(*(uint32_t*)(titleDec+0x18C));
 			if(tidHigh == 0x00050000)
