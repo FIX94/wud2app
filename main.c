@@ -325,10 +325,10 @@ int main(int argc, char *argv[])
 	int gmPart;
 	for(gmPart = 0; gmPart < numPartitions; gmPart++)
 	{
-		if(memcmp(tbl[gmPart].name,gmChar,18) == 0)
+		if(strncasecmp(tbl[gmPart].name,gmChar,18) == 0)
 			break;
 	}
-	if(memcmp(tbl[gmPart].name,gmChar,18) != 0)
+	if(strncasecmp(tbl[gmPart].name,gmChar,18) != 0)
 	{
 		puts("No GM Partition found!");
 		goto extractEnd;
