@@ -1,2 +1,2 @@
 # wud2app
-convert .wud images into cert, tik, tmd and app files
+convert wudump folders and .wud images into cert, tik, tmd and app files

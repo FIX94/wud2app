@@ -8,24 +8,36 @@
 #include <malloc.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include "rijndael.h"
 #include "sha1.h"
 #include "fst.h"
 #include "tmd.h"
 #include "structs.h"
+#include "wudparts.h"
 
 #define ALIGN_FORWARD(x,align) \
 	((typeof(x))((((uint32_t)(x)) + (align) - 1) & (~(align-1))))
 
 int main(int argc, char *argv[])
 {
-	puts("wud2app v1.0 by FIX94");
+	puts("wud2app v1.1 by FIX94");
 	char *ckeyChr = NULL, *gkeyChr = NULL, *gwudChr = NULL;
-	if(argc != 4)
+	bool use_wudparts = false;
+	if(argc != 2 && argc != 4)
 	{
-		puts("Usage:");
+		puts("--- Single WUD File Usage ---");
 		puts("wud2app common.key game.key game.wud");
+		puts("--- Wudump Folder Usage ---");
+		puts("wud2app \"/full/path/to/folder\" ");
 		return 0;
+	}
+	else if(argc == 2)
+	{
+		if(wudparts_open(argv[1]) == false)
+			return -1;
+		puts("Opened Wudump WUD Parts!");
+		use_wudparts = true;
 	}
 	else
 	{
@@ -35,11 +47,26 @@ int main(int argc, char *argv[])
 	}
 
 	//get common key
-	FILE *f = fopen(ckeyChr, "rb");
-	if(!f)
+	FILE *f = NULL;
+	if(use_wudparts)
 	{
-		printf("%s not found!\n", ckeyChr);
-		return -1;
+		char tmpChr[1024];
+		sprintf(tmpChr,"%s/common.key",argv[1]);
+		f = fopen(tmpChr, "rb");
+		if(!f)
+		{
+			puts("Failed to open common.key!");
+			return -3;
+		}
+	}
+	else
+	{
+		f = fopen(ckeyChr, "rb");
+		if(!f)
+		{
+			printf("%s not found!\n", ckeyChr);
+			return -1;
+		}
 	}
 	fseek(f, 0, SEEK_END);
 	size_t ckeysize = ftell(f);
@@ -55,11 +82,25 @@ int main(int argc, char *argv[])
 	fclose(f);
 
 	//get disc key
-	f = fopen(gkeyChr, "rb");
-	if(!f)
+	if(use_wudparts)
 	{
-		printf("%s not found!\n", gkeyChr);
-		return -3;
+		char tmpChr[1024];
+		sprintf(tmpChr,"%s/game.key",argv[1]);
+		f = fopen(tmpChr, "rb");
+		if(!f)
+		{
+			puts("Failed to open game.key!");
+			return -3;
+		}
+	}
+	else
+	{
+		f = fopen(gkeyChr, "rb");
+		if(!f)
+		{
+			printf("%s not found!\n", gkeyChr);
+			return -3;
+		}
 	}
 	fseek(f, 0, SEEK_END);
 	size_t keysize = ftell(f);
@@ -75,21 +116,36 @@ int main(int argc, char *argv[])
 	fclose(f);
 
 	//open game wud
-	f = fopen(gwudChr, "rb");
-	if(!f)
+	if(!use_wudparts)
 	{
-		printf("%s not found!\n", gwudChr);
-		return -5;
+		f = fopen(gwudChr, "rb");
+		if(!f)
+		{
+			printf("%s not found!\n", gwudChr);
+			return -5;
+		}
 	}
 	//read wud name
 	char outDir[11];
 	outDir[10] = '\0';
-	fread(outDir,1,10,f);
+	if(use_wudparts)
+		wudparts_read(outDir, 10);
+	else
+		fread(outDir, 1, 10, f);
 
+	puts("Reading Disc FST from WUD");
 	//read out and decrypt partition table
-	fseeko64(f,0x18000,SEEK_SET);
 	uint8_t *partTblEnc = malloc(0x8000);
-	fread(partTblEnc,1,0x8000,f);
+	if(use_wudparts)
+	{
+		wudparts_seek(0x18000);
+		wudparts_read(partTblEnc, 0x8000);
+	}
+	else
+	{
+		fseeko64(f, 0x18000, SEEK_SET);
+		fread(partTblEnc, 1, 0x8000, f);
+	}
 	uint8_t iv[16];
 	memset(iv,0,16);
 	aes_set_key(gamekey);
@@ -129,6 +185,7 @@ int main(int argc, char *argv[])
 	bool certFound = false, tikFound = false, tmdFound = false;
 	uint8_t tikKey[16];
 
+	puts("Searching for SI Partition");
 	//start by getting cert, tik and tmd
 	for(siPart = 0; siPart < numPartitions; siPart++)
 	{
@@ -147,10 +204,19 @@ int main(int argc, char *argv[])
 	//dont care about first header but only about data
 	uint64_t offset = ((uint64_t)__builtin_bswap32(tbl[siPart].offsetBE))*0x8000;
 	offset += 0x8000;
-	fseeko64(f, offset, SEEK_SET);
 	//read out FST
+	puts("Reading SI FST from WUD");
 	void *fstEnc = malloc(0x8000);
-	fread(fstEnc, 1, 0x8000, f);
+	if(use_wudparts)
+	{
+		wudparts_seek(offset);
+		wudparts_read(fstEnc, 0x8000);
+	}
+	else
+	{
+		fseeko64(f, offset, SEEK_SET);
+		fread(fstEnc, 1, 0x8000, f);
+	}
 	void *fstDec = malloc(0x8000);
 	memset(iv, 0, 16);
 	aes_set_key(gamekey);
@@ -175,9 +241,17 @@ int main(int argc, char *argv[])
 		uint32_t CNTSize = __builtin_bswap32(fe[entry].FileLength);
 		uint64_t CNTOff = ((uint64_t)__builtin_bswap32(fe[entry].FileOffset)) << 5;
 		uint64_t CNT_IV = __builtin_bswap64(CNTOff >> 16);
-		fseeko64(f, offset + CNTOff, SEEK_SET);
 		void *titleF = malloc(ALIGN_FORWARD(CNTSize,16));
-		fread(titleF, 1, ALIGN_FORWARD(CNTSize,16), f);
+		if(use_wudparts)
+		{
+			wudparts_seek(offset + CNTOff);
+			wudparts_read(titleF, ALIGN_FORWARD(CNTSize,16));
+		}
+		else
+		{
+			fseeko64(f, offset + CNTOff, SEEK_SET);
+			fread(titleF, 1, ALIGN_FORWARD(CNTSize,16), f);
+		}
 		uint8_t *titleDec = malloc(ALIGN_FORWARD(CNTSize,16));
 		memset(iv,0,16);
 		memcpy(iv + 8, &CNT_IV, 8);
@@ -240,41 +314,62 @@ int main(int argc, char *argv[])
 		puts("tik or tmd not found!");
 		goto extractEnd;
 	}
-
+	TitleMetaData *tmd = (TitleMetaData*)tmdBuf;
+	char gmChar[19];
+	uint64_t fullTid = __builtin_bswap64(tmd->TitleID);
+	sprintf(gmChar,"GM%016" PRIx64, fullTid);
+	printf("Searching for %s Partition\n", gmChar);
 	uint32_t appBufLen = 64*1024*1024;
 	void *appBuf = malloc(appBufLen);
 	//write game .app data next
 	int gmPart;
 	for(gmPart = 0; gmPart < numPartitions; gmPart++)
 	{
-		if(memcmp(tbl[gmPart].name,"GM",2) == 0)
+		if(memcmp(tbl[gmPart].name,gmChar,18) == 0)
 			break;
 	}
-	if(memcmp(tbl[gmPart].name,"GM",2) != 0)
+	if(memcmp(tbl[gmPart].name,gmChar,18) != 0)
 	{
 		puts("No GM Partition found!");
 		goto extractEnd;
 	}
+	puts("Reading GM Header from WUD");
 	offset = ((uint64_t)__builtin_bswap32(tbl[gmPart].offsetBE))*0x8000;
 	uint8_t *fHdr = malloc(0x8000);
-	fseeko64(f, offset, SEEK_SET);
-	fread(fHdr, 1, 0x8000, f);
+	if(use_wudparts)
+	{
+		wudparts_seek(offset);
+		wudparts_read(fHdr, 0x8000);
+	}
+	else
+	{
+		fseeko64(f, offset, SEEK_SET);
+		fread(fHdr, 1, 0x8000, f);
+	}
 	uint32_t fHdrCnt = __builtin_bswap32(*(uint32_t*)(fHdr+0x10));
 	uint8_t *hashPos = fHdr + 0x40 + (fHdrCnt*4);
 
 	//grab FST first
-	fseeko64(f, offset + 0x8000, SEEK_SET);
-	TitleMetaData *tmd = (TitleMetaData*)tmdBuf;
+	puts("Reading GM FST from WUD");
 	uint64_t fstSize = __builtin_bswap64(tmd->Contents[0].Size);
 	fstEnc = malloc(ALIGN_FORWARD(fstSize,16));
-	fread(fstEnc,1,ALIGN_FORWARD(fstSize,16),f);
+	if(use_wudparts)
+	{
+		wudparts_seek(offset + 0x8000);
+		wudparts_read(fstEnc, ALIGN_FORWARD(fstSize,16));
+	}
+	else
+	{
+		fseeko64(f, offset + 0x8000, SEEK_SET);
+		fread(fstEnc, 1, ALIGN_FORWARD(fstSize,16), f);
+	}
 	//write FST to file
 	uint32_t fstContentCid = __builtin_bswap32(tmd->Contents[0].ID);
 	char outF[64];
 	sprintf(outF,"%s/%08x.app",outDir,fstContentCid);
 	printf("Writing %08x.app\n",fstContentCid);
 	FILE *t = fopen(outF, "wb");
-	fwrite(fstEnc,1,ALIGN_FORWARD(fstSize,16),t);
+	fwrite(fstEnc, 1, ALIGN_FORWARD(fstSize,16), t);
 	fclose(t);
 	//decrypt FST to use now
 	memset(iv, 0, 16);
@@ -292,7 +387,11 @@ int main(int argc, char *argv[])
 	for(curCont = 1; curCont < titleCnt; curCont++)
 	{
 		uint64_t appOffset = ((uint64_t)__builtin_bswap32(appTbl[curCont].offsetBE))*0x8000;
-		fseeko64(f, offset + appOffset, SEEK_SET);
+		uint64_t totalAppOffset = offset + appOffset;
+		if(use_wudparts)
+			wudparts_seek(totalAppOffset);
+		else
+			fseeko64(f, totalAppOffset, SEEK_SET);
 		uint64_t tSize = __builtin_bswap64(tmd->Contents[curCont].Size);
 		uint32_t curContentCid = __builtin_bswap32(tmd->Contents[curCont].ID);
 		char outF[64];
@@ -303,7 +402,10 @@ int main(int argc, char *argv[])
 		while(total > 0)
 		{
 			uint32_t toWrite = ((total > (uint64_t)appBufLen) ? (appBufLen) : (uint32_t)(total));
-			fread(appBuf, 1, toWrite, f);
+			if(use_wudparts)
+				wudparts_read(appBuf, toWrite);
+			else
+				fread(appBuf, 1, toWrite, f);
 			fwrite(appBuf, 1, toWrite, t);
 			total -= toWrite;
 		}
@@ -328,6 +430,9 @@ int main(int argc, char *argv[])
 	puts("Done!");
 extractEnd:
 	free(partTbl);
-	fclose(f);
+	if(use_wudparts)
+		wudparts_close();
+	else
+		fclose(f);
 	return 0;
 }
