@@ -28,18 +28,18 @@ bool wudparts_open(const char *path)
 		parts[i] = fopen(file,"rb");
 		if(parts[i] == NULL)
 		{
-			printf("Failed to open game_part%i.wud!\n", i);
+			printf("Failed to open game_part%i.wud!\n", i+1);
 			fail = true;
 			break;
 		}
 		part_offset_current[i] = 0;
 		part_offset_start[i] = offset;
-		fseeko64(parts[i],0,SEEK_END);
-		uint64_t fsize = ftello64(parts[i]);
-		fseeko64(parts[i],0,SEEK_SET);
+		fseek(parts[i],0,SEEK_END);
+		size_t fsize = ftell(parts[i]);
+		fseek(parts[i],0,SEEK_SET);
 		if((i == 11 && fsize != 0x53A00000) || (i != 11 && fsize != 0x80000000))
 		{
-			printf("game_part%i.wud has a wrong filesize!\n", i);
+			printf("game_part%i.wud has a wrong filesize!\n", i+1);
 			fail = true;
 			break;
 		}
