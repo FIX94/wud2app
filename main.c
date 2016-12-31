@@ -22,7 +22,7 @@
 
 int main(int argc, char *argv[])
 {
-	puts("wud2app v1.1u2 by FIX94");
+	puts("wud2app v1.1u3 by FIX94");
 	char *ckeyChr = NULL, *gkeyChr = NULL, *gwudChr = NULL;
 	bool use_wudparts = false;
 	if(argc != 2 && argc != 4)
