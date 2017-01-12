@@ -9,7 +9,7 @@
 #define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 	}
 
 	//create output folder
-	mkdir(outDir);
+	mkdir(outDir, 0750);
 
 	//dont care about first header but only about data
 	uint64_t offset = ((uint64_t)__builtin_bswap32(tbl[siPart].offsetBE))*0x8000;
