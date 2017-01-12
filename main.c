@@ -9,7 +9,7 @@
 #define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
 		{
 			puts("Writing title.cert");
 			FILE *t = fopen(outF, "wb");
-			fwrite(titleDec, 1, CNTSize, t);
+			fwrite(titleDec, 1, CNTSize, t); // Segmentation fault: 11
 			fclose(t);
 			certFound = true;
 		}
