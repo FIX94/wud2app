@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
 		{
 			puts("Writing title.cert");
 			FILE *t = fopen(outF, "wb");
-			fwrite(titleDec, 1, CNTSize, t); // Segmentation fault: 11
+			fwrite(titleDec, 1, CNTSize, t);
 			fclose(t);
 			certFound = true;
 		}
